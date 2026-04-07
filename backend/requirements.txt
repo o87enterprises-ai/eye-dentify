@@ -1,0 +1,35 @@
+# Web Framework
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.9
+pydantic==2.9.0
+pydantic-settings==2.5.0
+
+# Database
+sqlalchemy==2.0.35
+alembic==1.13.3
+asyncpg==0.30.0
+aiosqlite==0.20.0
+psycopg2-binary==2.9.9
+
+# Task Queue
+celery==5.4.0
+redis==5.1.0
+
+# YouTube Integration
+yt-dlp==2024.10.7
+
+# ML/AI
+torch
+torchvision
+opencv-python==4.13.0.92
+faiss-cpu==1.13.0
+numpy>=2.0.0
+Pillow==11.3.0
+scikit-learn==1.6.1
+
+# Utilities
+python-dotenv==1.0.1
+httpx==0.27.2
+aiofiles==24.1.0
+loguru==0.7.2

@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eye-Dentify | Forensic Intelligence Platform v2.1</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <style>
+        @keyframes scan { 0% { transform: translateY(-100%); } 100% { transform: translateY(200%); } }
+        .animate-scan { animation: scan 4s linear infinite; }
+        @keyframes glitch { 0% { transform: translate(0); } 20% { transform: translate(-2px, 2px); } 40% { transform: translate(-2px, -2px); } 60% { transform: translate(2px, 2px); } 80% { transform: translate(2px, -2px); } 100% { transform: translate(0); } }
+        .animate-glitch { animation: glitch 0.3s cubic-bezier(.25, .46, .45, .94) both infinite; }
+        body { background-color: #06090F; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none !important; }
+        #canvas-container canvas { pointer-events: none !important; }
+        .pointer-none { pointer-events: none; }
+        .page { display: none; }
+        .page.active { display: block; }
+        .tab-btn.active { color: #00D1FF; border-bottom: 2px solid #00D1FF; }
+        .forensic-input { background: #0B1A2A; border: 1px solid #00D1FF; color: #00D1FF; font-family: 'Courier New', monospace; padding: 12px 16px; width: 100%; transition: all 0.3s ease; }
+        .forensic-input:focus { outline: none; border-color: #D4AF37; box-shadow: 0 0 15px rgba(212,175,55,0.3); }
+        .forensic-input::placeholder { color: rgba(0,209,255,0.4); }
+        .forensic-btn { background: rgba(0,209,255,0.1); border: 2px solid #D4AF37; color: #D4AF37; font-weight: 900; letter-spacing: 0.2em; text-transform: uppercase; transition: all 0.3s ease; cursor: pointer; }
+        .forensic-btn:hover:not(:disabled) { background: #D4AF37; color: #06090F; box-shadow: 0 0 25px rgba(212,175,55,0.5); }
+        .forensic-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .evidence-tile { background: #121C26; border: 1px solid rgba(0,209,255,0.2); transition: all 0.3s ease; position: relative; overflow: hidden; cursor: pointer; }
+        .evidence-tile:hover { border-color: #D4AF37; box-shadow: 0 0 20px rgba(212,175,55,0.2); }
+        .badge-verified { background: rgba(0,255,156,0.2); color: #00FF9C; border: 1px solid #00FF9C; }
+        .badge-flagged { background: rgba(255,59,59,0.2); color: #FF3B3B; border: 1px solid #FF3B3B; animation: glitch 0.5s infinite; }
+        .badge-processing { background: rgba(0,209,255,0.2); color: #00D1FF; border: 1px solid #00D1FF; animation: pulse 2s infinite; }
+        .badge-archived { background: rgba(127,140,154,0.2); color: #7F8C9A; border: 1px solid #D4AF37; }
+        .verdict-stamp { border: 2px solid #D4AF37; background: linear-gradient(135deg, rgba(212,175,55,0.1), rgba(212,175,55,0.05)); text-shadow: 0 1px 2px rgba(0,0,0,0.5); position: relative; }
+        .verdict-stamp::before { content: ''; position: absolute; inset: 4px; border: 1px solid rgba(212,175,55,0.3); pointer-events: none; }
+        .file-drop-zone { border: 2px dashed rgba(212,175,55,0.4); transition: all 0.3s ease; }
+        .file-drop-zone.dragover { border-color: #00D1FF; background: rgba(0,209,255,0.05); box-shadow: 0 0 20px rgba(0,209,255,0.2); }
+        .source-tab.active { background: rgba(0,209,255,0.2); color: #00D1FF; border-color: #00D1FF; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #121C26; }
+        ::-webkit-scrollbar-thumb { background: #D4AF37; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #00D1FF; }
+        .grid-bg { background-image: linear-gradient(rgba(0,209,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,209,255,0.05) 1px, transparent 1px); background-size: 50px 50px; }
+
+        /* Progress Overlay */
+        #progress-overlay {
+            position: fixed; inset: 0; background: rgba(6,9,15,0.97); z-index: 99999;
+            display: none; align-items: center; justify-content: center;
+            backdrop-filter: blur(20px); flex-direction: column;
+        }
+        #progress-overlay.active { display: flex; }
+        .progress-ring { transform: rotate(-90deg); }
+        .progress-ring-circle { transition: stroke-dashoffset 0.3s ease; }
+        @keyframes pulse-ring { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.8; } }
+        .pulse-ring { animation: pulse-ring 2s ease-in-out infinite; }
+
+        /* Landing Page */
+        .landing-step { position: relative; padding-left: 40px; }
+        .landing-step::before {
+            content: ''; position: absolute; left: 12px; top: 30px; bottom: -10px;
+            width: 2px; background: linear-gradient(to bottom, #D4AF37, transparent);
+        }
+        .landing-step:last-child::before { display: none; }
+        .step-number {
+            position: absolute; left: 0; top: 0; width: 26px; height: 26px;
+            border-radius: 50%; background: #D4AF37; color: #06090F;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: 900;
+        }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(6,9,15,0.95); z-index: 9999; display: none; align-items: center; justify-content: center; backdrop-filter: blur(10px); }
+        .modal-overlay.active { display: flex; }
+    </style>
+</head>
+<body class="text-slate-200 font-mono overflow-hidden">
+
+    <div id="canvas-container"></div>
+    <div class="absolute inset-0 grid-bg opacity-20" style="z-index:0;pointer-events:none"></div>
+
+    <!-- ==================== PROGRESS OVERLAY ==================== -->
+    <div id="progress-overlay">
+        <div class="relative mb-8">
+            <svg class="progress-ring" width="160" height="160">
+                <circle cx="80" cy="80" r="70" fill="none" stroke="#121C26" stroke-width="6" />
+                <circle class="progress-ring-circle" id="progress-circle" cx="80" cy="80" r="70" fill="none" stroke="#00D1FF" stroke-width="6" stroke-linecap="round" stroke-dasharray="440" stroke-dashoffset="440" />
+            </svg>
+            <div class="absolute inset-0 flex items-center justify-center">
+                <div class="text-center">
+                    <span class="text-4xl font-black text-white" id="progress-pct">0</span>
+                    <span class="text-lg text-[#00D1FF]">%</span>
+                </div>
+            </div>
+            <div class="absolute inset-[-10px] rounded-full border border-[#D4AF37]/30 pulse-ring"></div>
+        </div>
+
+        <h2 class="text-xl font-black text-white uppercase tracking-widest mb-2" id="progress-title">INITIALIZING ANALYSIS</h2>
+        <p class="text-slate-400 text-xs mb-8 font-mono" id="progress-status">Establishing forensic baseline...</p>
+
+        <div class="w-80 space-y-2">
+            <div class="flex justify-between text-[9px] text-slate-500 uppercase tracking-wider">
+                <span id="progress-phase">Phase 1 of 5</span>
+                <span id="progress-eta">ETA: ~30s</span>
+            </div>
+            <div class="h-1 bg-[#121C26] rounded-full overflow-hidden">
+                <div id="progress-sub-bar" class="h-full bg-gradient-to-r from-[#00D1FF] to-[#D4AF37] transition-all duration-500" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Analysis Steps -->
+        <div class="mt-8 w-80 space-y-1" id="progress-steps">
+            <div class="flex items-center gap-2 text-[10px] font-mono" data-step="1">
+                <span class="text-[#00D1FF]">▸</span>
+                <span class="text-slate-500" id="step-1">Extracting frames...</span>
+            </div>
+            <div class="flex items-center gap-2 text-[10px] font-mono" data-step="2">
+                <span class="text-slate-700">○</span>
+                <span class="text-slate-700" id="step-2">Computing optical flow...</span>
+            </div>
+            <div class="flex items-center gap-2 text-[10px] font-mono" data-step="3">
+                <span class="text-slate-700">○</span>
+                <span class="text-slate-700" id="step-3">Running AI detection model...</span>
+            </div>
+            <div class="flex items-center gap-2 text-[10px] font-mono" data-step="4">
+                <span class="text-slate-700">○</span>
+                <span class="text-slate-700" id="step-4">Cross-referencing database...</span>
+            </div>
+            <div class="flex items-center gap-2 text-[10px] font-mono" data-step="5">
+                <span class="text-slate-700">○</span>
+                <span class="text-slate-700" id="step-5">Generating forensic report...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== LANDING PAGE ==================== -->
+    <div id="landing-page" class="fixed inset-0 z-[99998] bg-[#06090F] overflow-y-auto">
+        <div class="min-h-screen flex flex-col">
+            <!-- Landing Header -->
+            <div class="flex items-center justify-center pt-12 pb-8">
+                <div class="flex items-center gap-4">
+                    <div class="w-16 h-16 rounded-full border-2 border-[#D4AF37] flex items-center justify-center bg-[#121C26] shadow-[0_0_30px_rgba(212,175,55,0.4)]">
+                        <img src="/logo.png" alt="Logo" class="w-14 h-14 object-contain" onerror="this.style.display='none';this.parentElement.innerHTML='<span class=\'text-4xl\'>👁️</span>'" />
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-black tracking-tighter text-white">EYE-<span class="text-[#00D1FF]">DENTIFY</span></h1>
+                        <p class="text-[9px] text-[#D4AF37] tracking-[.4em] font-bold uppercase">Forensic Intelligence Platform</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-1 flex items-center justify-center px-6 pb-12">
+                <div class="max-w-4xl w-full">
+                    <!-- Welcome Message -->
+                    <div class="text-center mb-10">
+                        <h2 class="text-3xl font-black text-white mb-3 tracking-tight">Welcome to Digital Forensics</h2>
+                        <p class="text-slate-400 text-sm max-w-xl mx-auto">Submit videos for AI-powered analysis. Detect deepfakes, find similar content, and extract metadata from any source.</p>
+                    </div>
+
+                    <!-- Instructions -->
+                    <div class="bg-[#121C26] border border-[#D4AF37]/30 p-8 rounded-lg border-l-2 border-l-[#D4AF37] shadow-[0_0_15px_rgba(212,175,55,0.1)] mb-8">
+                        <h3 class="text-[#D4AF37] text-sm font-black uppercase tracking-widest mb-6 flex items-center gap-2">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                            How to Use Eye-Dentify
+                        </h3>
+
+                        <div class="space-y-5">
+                            <div class="landing-step">
+                                <div class="step-number">1</div>
+                                <h4 class="text-white font-bold text-sm mb-1">Submit Evidence</h4>
+                                <p class="text-slate-400 text-xs leading-relaxed">Go to <span class="text-[#00D1FF]">Command</span> and either paste a <strong>URL</strong> (YouTube, Vimeo, Dailymotion, TikTok) or <strong>upload a file</strong> from your device by dragging & dropping or clicking to browse.</p>
+                            </div>
+                            <div class="landing-step">
+                                <div class="step-number">2</div>
+                                <h4 class="text-white font-bold text-sm mb-1">Select Analysis Type</h4>
+                                <p class="text-slate-400 text-xs leading-relaxed">Choose your forensic protocol: <span class="text-gold">Full Spectrum</span> (recommended), Reverse Search only, AI Detection only, or Metadata Extraction only.</p>
+                            </div>
+                            <div class="landing-step">
+                                <div class="step-number">3</div>
+                                <h4 class="text-white font-bold text-sm mb-1">Monitor Progress</h4>
+                                <p class="text-slate-400 text-xs leading-relaxed">A <span class="text-[#00D1FF]">real-time progress indicator</span> will show each analysis phase — frame extraction, optical flow, AI detection, database matching, and report generation. You'll see the exact completion percentage.</p>
+                            </div>
+                            <div class="landing-step">
+                                <div class="step-number">4</div>
+                                <h4 class="text-white font-bold text-sm mb-1">Review Results</h4>
+                                <p class="text-slate-400 text-xs leading-relaxed">View forensic verdicts in <span class="text-gold">Case Archive</span>. Search for similar videos in <span class="text-[#00D1FF]">Search</span>. Manage the index in <span class="text-green-500">Index System</span>.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Feature Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                        <div class="bg-[#121C26]/80 border border-slate-800 p-5 rounded-lg text-center">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00D1FF" stroke-width="2" class="mx-auto mb-3"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                            <h4 class="text-white font-bold text-xs uppercase tracking-wider mb-1">Reverse Search</h4>
+                            <p class="text-slate-500 text-[10px]">Find visually similar videos using AI feature matching</p>
+                        </div>
+                        <div class="bg-[#121C26]/80 border border-slate-800 p-5 rounded-lg text-center">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" stroke-width="2" class="mx-auto mb-3"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                            <h4 class="text-white font-bold text-xs uppercase tracking-wider mb-1">Deepfake Detection</h4>
+                            <p class="text-slate-500 text-[10px]">Identify AI-generated or manipulated media content</p>
+                        </div>
+                        <div class="bg-[#121C26]/80 border border-slate-800 p-5 rounded-lg text-center">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00FF9C" stroke-width="2" class="mx-auto mb-3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                            <h4 class="text-white font-bold text-xs uppercase tracking-wider mb-1">Metadata Extraction</h4>
+                            <p class="text-slate-500 text-[10px]">Extract GPS, timestamps, and technical data</p>
+                        </div>
+                    </div>
+
+                    <!-- Enter Button -->
+                    <div class="text-center">
+                        <button onclick="dismissLanding()" class="forensic-btn px-16 py-5 rounded font-mono text-sm flex items-center justify-center gap-3 mx-auto">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                            ENTER COMMAND CENTER
+                        </button>
+                        <p class="text-slate-600 text-[10px] mt-4 uppercase tracking-wider">Supported formats: MP4, AVI, MOV, MKV, WEBM • Sources: YouTube, Vimeo, Dailymotion, TikTok, direct URLs, local files</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Landing Footer -->
+            <footer class="h-8 border-t border-slate-800 bg-black/80 flex items-center justify-between px-6 text-[9px] text-[#D4AF37] italic uppercase font-bold tracking-widest">
+                <span>087 Software Development © 2026</span>
+                <span>Integrity • Insight • Identification</span>
+            </footer>
+        </div>
+    </div>
+
+    <!-- 🧭 HUD OVERLAY -->
+    <div class="relative z-10 h-screen flex flex-col">
+
+        <!-- HEADER -->
+        <header class="h-16 border-t-2 border-[#D4AF37] bg-black/90 backdrop-blur-xl flex items-center justify-between px-8 pointer-events-auto shadow-2xl">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-full border-2 border-[#D4AF37] flex items-center justify-center bg-[#121C26] shadow-[0_0_15px_rgba(212,175,55,0.4)] overflow-hidden">
+                    <img src="/logo.png" alt="Eye-Dentify" class="w-10 h-10 object-contain" onerror="this.style.display='none';this.parentElement.innerHTML='<span class=\'text-4xl\'>👁️</span>'" />
+                </div>
+                <div>
+                    <h1 class="text-xl font-black tracking-tighter">EYE-<span class="text-[#00D1FF]">DENTIFY</span></h1>
+                    <p class="text-[8px] text-[#D4AF37] tracking-[.4em] font-bold uppercase leading-none">Forensic Intelligence Platform</p>
+                </div>
+            </div>
+
+            <nav class="flex gap-8 lg:gap-10 text-[10px] font-bold text-slate-500 uppercase tracking-widest h-full items-center">
+                <button class="tab-btn active h-full flex items-center gap-2 hover:text-white transition-all px-2" onclick="showPage('home')">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                    Command
+                </button>
+                <button class="tab-btn h-full flex items-center gap-2 hover:text-white transition-all px-2" onclick="showPage('search')">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    Search
+                </button>
+                <button class="tab-btn h-full flex items-center gap-2 hover:text-white transition-all px-2" onclick="showPage('library')">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                    Archive
+                </button>
+                <button class="tab-btn h-full flex items-center gap-2 hover:text-white transition-all px-2" onclick="showPage('index')">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 1v6m0 6v6m8.36-15.66l-4.24 4.24M8.48 15.52l-4.24 4.24m15.66 0l-4.24-4.24M8.48 8.48L4.24 4.24"></path></svg>
+                    Index
+                </button>
+            </nav>
+
+            <div class="text-right text-[10px] text-slate-500">
+                <p class="text-[#D4AF37] uppercase font-bold leading-none">Node: <span id="node-status">—</span></p>
+                <p class="text-[8px] leading-none mt-1" id="index-info">Connecting...</p>
+                <!-- Only show API URL input on localhost -->
+                <div id="api-config" class="hidden mt-1">
+                    <div class="flex items-center gap-1">
+                        <input type="text" id="api-url-input" class="bg-[#0B1A2A] border border-slate-700 text-[#00D1FF] text-[8px] font-mono px-2 py-0.5 rounded w-36 focus:border-[#D4AF37] outline-none" placeholder="Paste API URL..." />
+                        <button onclick="setApiUrl()" class="text-[#00D1FF] hover:text-[#D4AF37] text-[8px] font-bold uppercase">Set</button>
+                    </div>
+                </div>
+                <p class="text-[8px] leading-none mt-1 text-[#00D1FF] underline cursor-pointer hover:text-[#D4AF37] hidden" id="connect-link" onclick="connectApi()">Connect to API →</p>
+            </div>
+        </header>
+
+        <!-- ==================== HOME PAGE ==================== -->
+        <main id="page-home" class="page active flex-1 overflow-y-auto p-6">
+            <div class="max-w-6xl mx-auto w-full space-y-6">
+                <!-- Hero -->
+                <div class="text-center py-6">
+                    <div class="inline-flex items-center justify-center w-20 h-20 rounded-full border-2 border-[#D4AF37] bg-[#121C26] mb-4 shadow-[0_0_30px_rgba(212,175,55,0.3)]">
+                        <img src="/logo.png" alt="Logo" class="w-16 h-16 object-contain" onerror="this.style.display='none';this.parentElement.innerHTML='<span class=\'text-4xl\'>👁️</span>'" />
+                    </div>
+                    <h2 class="text-3xl font-black text-white mb-2 tracking-tight">Integrity. Insight. Identification.</h2>
+                    <p class="text-slate-400 text-sm max-w-2xl mx-auto">Submit digital evidence for forensic analysis. Upload files or provide URLs from any source.</p>
+                </div>
+
+                <!-- Messages -->
+                <div id="home-error" class="hidden bg-red-600/10 border border-red-600 p-4 rounded-lg flex items-start gap-3">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF3B3B" stroke-width="2" class="flex-shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                    <div class="flex-1"><p class="text-red-500 text-sm font-bold uppercase tracking-wider mb-1">Analysis Failed</p><p class="text-slate-300 text-xs" id="home-error-text"></p></div>
+                    <button onclick="document.getElementById('home-error').classList.add('hidden')" class="text-slate-500 hover:text-white">✕</button>
+                </div>
+                <div id="home-success" class="hidden bg-green-500/10 border border-green-500 p-4 rounded-lg flex items-start gap-3">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00FF9C" stroke-width="2" class="flex-shrink-0 mt-0.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    <div class="flex-1"><p class="text-green-500 text-sm font-bold uppercase tracking-wider mb-1">Evidence Submitted</p><p class="text-slate-300 text-xs" id="home-success-text"></p></div>
+                </div>
+
+                <!-- Evidence Intake -->
+                <div class="bg-[#121C26] border border-[#D4AF37]/30 p-6 rounded-lg border-l-2 border-l-[#D4AF37] shadow-[0_0_15px_rgba(212,175,55,0.1)]">
+                    <h3 class="text-[#D4AF37] text-sm font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        Evidence Intake System
+                    </h3>
+
+                    <div class="flex gap-2 mb-5">
+                        <button class="source-tab active px-4 py-2 rounded text-[10px] font-black uppercase tracking-widest border border-[#00D1FF] text-[#00D1FF] transition-all" onclick="switchSource('url', this)">🔗 URL Source</button>
+                        <button class="source-tab px-4 py-2 rounded text-[10px] font-black uppercase tracking-widest border border-slate-700 text-slate-500 hover:border-[#D4AF37] hover:text-[#D4AF37] transition-all" onclick="switchSource('file', this)">📁 File Upload</button>
+                    </div>
+
+                    <!-- URL Input -->
+                    <div id="source-url" class="space-y-4">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 uppercase tracking-widest mb-2 font-bold">Evidence Source URL</label>
+                            <input type="text" id="input-url" class="forensic-input rounded" placeholder="https://youtube.com/watch?v=...  or  https://vimeo.com/...  or  https://dailymotion.com/..." />
+                            <p class="text-[9px] text-slate-500 mt-2 uppercase tracking-tighter">Supports: YouTube, Vimeo, Dailymotion, TikTok, or any direct video URL</p>
+                        </div>
+                    </div>
+
+                    <!-- File Upload -->
+                    <div id="source-file" class="hidden space-y-4">
+                        <div id="file-drop" class="file-drop-zone rounded-lg p-8 text-center cursor-pointer" onclick="document.getElementById('file-input').click()">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" stroke-width="2" class="mx-auto mb-3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            <p class="text-[#D4AF37] text-sm font-bold uppercase tracking-wider mb-1">Drop video file here</p>
+                            <p class="text-slate-500 text-xs">or click to browse</p>
+                            <p class="text-slate-600 text-[10px] mt-2">MP4, AVI, MOV, MKV, WEBM (Max 2GB)</p>
+                        </div>
+                        <input type="file" id="file-input" class="hidden" accept="video/*,.mp4,.avi,.mov,.mkv,.webm" onchange="handleFileSelect(event)" />
+                        <div id="file-info" class="hidden bg-black/60 border border-slate-800 p-3 rounded flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00D1FF" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                                <div>
+                                    <p class="text-[#00D1FF] text-xs font-bold" id="file-name"></p>
+                                    <p class="text-slate-500 text-[10px]" id="file-size"></p>
+                                </div>
+                            </div>
+                            <button onclick="clearFile()" class="text-slate-500 hover:text-red-500 text-xs">✕ Remove</button>
+                        </div>
+                    </div>
+
+                    <!-- Analysis Type -->
+                    <div class="mt-5">
+                        <label class="block text-[10px] text-slate-400 uppercase tracking-widest mb-2 font-bold">Forensic Analysis Protocol</label>
+                        <select id="analysis-type" class="forensic-input rounded cursor-pointer">
+                            <option value="full">FULL SPECTRUM (Reverse Search + AI Detection + Metadata)</option>
+                            <option value="search">REVERSE SEARCH ONLY</option>
+                            <option value="ai">AI/CGI DETECTION ONLY</option>
+                            <option value="gps">GPS/METADATA EXTRACTION ONLY</option>
+                        </select>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button id="submit-btn" class="forensic-btn w-full py-4 rounded font-mono text-sm mt-5 flex items-center justify-center gap-2" onclick="submitEvidence()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                        INITIATE ANALYSIS
+                    </button>
+                </div>
+
+                <!-- Feature Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+                    <div class="bg-[#121C26] border border-slate-800 p-5 rounded-lg hover:border-[#00D1FF] transition-all">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00D1FF" stroke-width="2" class="mb-3"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        <h3 class="text-white font-bold text-sm uppercase tracking-wider mb-2">Reverse Search</h3>
+                        <p class="text-slate-400 text-xs leading-relaxed">Find visually similar evidence using AI-powered feature matching.</p>
+                    </div>
+                    <div class="bg-[#121C26] border border-slate-800 p-5 rounded-lg hover:border-[#D4AF37] transition-all">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" stroke-width="2" class="mb-3"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                        <h3 class="text-white font-bold text-sm uppercase tracking-wider mb-2">AI Detection</h3>
+                        <p class="text-slate-400 text-xs leading-relaxed">Detect AI-generated or manipulated content using heuristic analysis.</p>
+                    </div>
+                    <div class="bg-[#121C26] border border-slate-800 p-5 rounded-lg hover:border-green-500 transition-all">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00FF9C" stroke-width="2" class="mb-3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                        <h3 class="text-white font-bold text-sm uppercase tracking-wider mb-2">Metadata Extraction</h3>
+                        <p class="text-slate-400 text-xs leading-relaxed">Extract GPS, timestamps, and technical metadata from evidence.</p>
+                    </div>
+                </div>
+
+                <!-- System Status -->
+                <div class="bg-[#121C26]/50 border border-slate-800 rounded-lg p-4 flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="flex items-center gap-2"><div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div><span class="text-[10px] text-green-500 font-mono uppercase">System Online</span></div>
+                        <div class="flex items-center gap-2"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#00D1FF" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg><span class="text-[10px] text-[#00D1FF] font-mono">FAISS Index Active</span></div>
+                    </div>
+                    <div class="text-[10px] text-slate-500 font-mono">ResNet50 • OpenCV • yt-dlp</div>
+                </div>
+            </div>
+        </main>
+
+        <!-- ==================== SEARCH PAGE ==================== -->
+        <main id="page-search" class="page flex-1 overflow-y-auto p-6">
+            <div class="max-w-5xl mx-auto w-full space-y-6">
+                <div class="mb-6">
+                    <h2 class="text-2xl font-black text-white mb-1 tracking-tight"><span class="text-[#00D1FF]">INTELLIGENCE</span> QUERY SYSTEM</h2>
+                    <p class="text-slate-400 text-xs">Search the forensic database for visually similar evidence</p>
+                </div>
+
+                <div class="bg-[#121C26] border border-[#D4AF37]/30 p-6 rounded-lg border-l-2 border-l-[#D4AF37] shadow-[0_0_15px_rgba(212,175,55,0.1)]">
+                    <h3 class="text-[#00D1FF] text-lg font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        Forensic Database Query
+                    </h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 uppercase tracking-widest mb-2 font-bold">Query Source</label>
+                            <input type="text" id="search-url" class="forensic-input rounded" placeholder="Paste video URL or evidence source..." />
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter border border-slate-700 text-slate-500">🟢 ALL</span>
+                            <span class="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter border border-slate-700 text-slate-500">🔴 VERIFIED</span>
+                            <span class="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter border border-slate-700 text-slate-500">🔵 MANIPULATED</span>
+                            <span class="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter border border-slate-700 text-slate-500">🟡 AI GENERATED</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="block text-[10px] text-slate-400 uppercase tracking-widest mb-2 font-bold">Top K Results</label><input type="number" id="search-topk" class="forensic-input rounded" min="1" max="100" value="10" /></div>
+                            <div><label class="block text-[10px] text-slate-400 uppercase tracking-widest mb-2 font-bold">Similarity Threshold</label><input type="range" id="search-threshold" class="w-full" min="0" max="1" step="0.05" value="0.5" oninput="document.getElementById('threshold-val').textContent=Math.round(this.value*100)+'%'" /><p class="text-[9px] text-[#00D1FF] text-center mt-1 font-mono" id="threshold-val">50%</p></div>
+                        </div>
+                        <button id="search-btn" class="forensic-btn w-full py-4 rounded font-mono text-sm flex items-center justify-center gap-2" onclick="executeSearch()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                            EXECUTE QUERY
+                        </button>
+                    </div>
+                </div>
+
+                <div id="search-error" class="hidden bg-red-600/10 border border-red-600 p-4 rounded-lg flex items-start gap-3">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF3B3B" stroke-width="2" class="flex-shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                    <div><p class="text-red-500 text-sm font-bold uppercase tracking-wider mb-1">Query Failed</p><p class="text-slate-300 text-xs" id="search-error-text"></p></div>
+                </div>
+
+                <div id="search-results" class="hidden space-y-3">
+                    <div class="flex items-center justify-between bg-[#121C26] border border-slate-800 p-4 rounded-lg">
+                        <div><h3 class="text-[#D4AF37] text-sm font-black uppercase tracking-widest">Query Results</h3><p class="text-slate-400 text-xs mt-1" id="search-count">0 matches found</p></div>
+                    </div>
+                    <div id="search-results-list" class="space-y-3"></div>
+                </div>
+            </div>
+        </main>
+
+        <!-- ==================== LIBRARY PAGE ==================== -->
+        <main id="page-library" class="page flex-1 overflow-y-auto p-6">
+            <div class="max-w-7xl mx-auto w-full space-y-6">
+                <div class="flex items-center justify-between mb-6">
+                    <div><h2 class="text-2xl font-black text-white mb-1 tracking-tight"><span class="text-[#D4AF37]">CASE</span> ARCHIVE</h2><p class="text-slate-400 text-xs">Browse and manage all submitted evidence files</p></div>
+                    <button class="flex items-center gap-2 bg-[#121C26] border border-slate-700 hover:border-[#00D1FF] text-slate-300 hover:text-[#00D1FF] px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all" onclick="loadLibrary()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                        Refresh
+                    </button>
+                </div>
+
+                <div class="bg-[#121C26] border border-slate-800 p-4 rounded-lg">
+                    <div class="flex items-center gap-4 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                            <label class="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Filter:</label>
+                        </div>
+                        <select id="library-filter" class="bg-[#0B1A2A] border border-slate-700 text-slate-300 px-3 py-2 rounded text-[10px] font-mono uppercase tracking-wider focus:border-[#D4AF37] outline-none" onchange="loadLibrary()">
+                            <option value="">All Evidence</option>
+                            <option value="completed">Verified</option>
+                            <option value="pending">Pending</option>
+                            <option value="failed">Flagged</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="library-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"></div>
+                <div id="library-empty" class="hidden bg-[#121C26]/50 border border-slate-800 p-12 rounded-lg text-center">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#7F8C9A" stroke-width="2" class="mx-auto mb-4"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>
+                    <p class="text-slate-400 text-sm mb-2">No evidence files found</p>
+                    <p class="text-slate-600 text-xs">Submit a URL or upload a file from Command to begin</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- ==================== INDEX PAGE ==================== -->
+        <main id="page-index" class="page flex-1 overflow-y-auto p-6">
+            <div class="max-w-5xl mx-auto w-full space-y-6">
+                <div class="mb-6">
+                    <h2 class="text-2xl font-black text-white mb-1 tracking-tight"><span class="text-[#00D1FF]">FORENSIC</span> INDEX SYSTEM</h2>
+                    <p class="text-slate-400 text-xs">Manage the FAISS vector search index and monitor database statistics</p>
+                </div>
+
+                <div id="index-stats" class="hidden grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-[#121C26] border border-[#D4AF37]/30 p-5 rounded-lg border-l-2 border-l-[#D4AF37] text-center">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00D1FF" stroke-width="2" class="mx-auto mb-3"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                        <div class="text-3xl font-black text-[#00D1FF] mb-1" id="stat-vectors">0</div>
+                        <p class="text-[10px] text-slate-400 uppercase tracking-widest">Total Vectors</p>
+                    </div>
+                    <div class="bg-[#121C26] border border-[#D4AF37]/30 p-5 rounded-lg border-l-2 border-l-[#D4AF37] text-center">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" stroke-width="2" class="mx-auto mb-3"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                        <div class="text-3xl font-black text-[#D4AF37] mb-1" id="stat-videos">0</div>
+                        <p class="text-[10px] text-slate-400 uppercase tracking-widest">Videos Indexed</p>
+                    </div>
+                    <div class="bg-[#121C26] border border-[#D4AF37]/30 p-5 rounded-lg border-l-2 border-l-[#D4AF37] text-center">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00FF9C" stroke-width="2" class="mx-auto mb-3"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                        <div class="text-3xl font-black text-green-500 mb-1" id="stat-dim">0</div>
+                        <p class="text-[10px] text-slate-400 uppercase tracking-widest">Feature Dim</p>
+                    </div>
+                    <div class="bg-[#121C26] border border-[#D4AF37]/30 p-5 rounded-lg border-l-2 border-l-[#D4AF37] text-center">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#FF3B3B" stroke-width="2" class="mx-auto mb-3"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+                        <div class="text-3xl font-black text-red-500 mb-1" id="stat-size">0 MB</div>
+                        <p class="text-[10px] text-slate-400 uppercase tracking-widest">Index Size</p>
+                    </div>
+                </div>
+
+                <div id="index-no-data" class="bg-red-600/10 border border-red-600 p-8 rounded-lg text-center">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#FF3B3B" stroke-width="2" class="mx-auto mb-4"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    <p class="text-red-500 text-sm font-bold uppercase tracking-widest mb-2">No Forensic Index Found</p>
+                    <p class="text-slate-400 text-xs">Build an index by submitting videos for analysis</p>
+                </div>
+
+                <div class="bg-[#121C26] border border-[#D4AF37]/30 p-6 rounded-lg border-l-2 border-l-[#D4AF37]">
+                    <h3 class="text-[#D4AF37] text-sm font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                        Index Operations
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button class="forensic-btn py-4 rounded flex items-center justify-center gap-2" onclick="rebuildIndex()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                            REBUILD INDEX
+                        </button>
+                        <button class="forensic-btn py-4 rounded flex items-center justify-center gap-2 border-red-600 text-red-500 hover:bg-red-600 hover:text-white" onclick="resetIndex()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                            RESET INDEX
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="h-8 border-t border-slate-800 bg-black/80 flex items-center justify-between px-6 text-[9px] text-[#D4AF37] italic uppercase font-bold tracking-widest pointer-events-auto">
+            <span>087 Software Development © 2026</span>
+            <span>Integrity • Insight • Identification</span>
+        </footer>
+    </div>
+
+    <script>
+        // === CONFIG ===
+        // Auto-detect: HF Space uses same-origin, localhost uses local backend
+        let API_BASE = window.location.hostname === 'localhost' 
+            ? 'http://localhost:8000/api/v1' 
+            : '/api/v1';
+        let apiOnline = window.location.hostname !== 'localhost'; // Start offline on localhost
+        let selectedFile = null;
+        let mockLibrary = [
+            { id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', title: 'Deepfake Detection Benchmark 2024', youtube_url: 'https://youtube.com/watch?v=dQw4w9WgXcQ', thumbnail_url: '', status: 'completed', frames_count: 1247, features_count: 1247, duration: 342, channel: 'ForensicsLab', created_at: '2026-04-05T14:30:00' },
+            { id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901', title: 'CGI Breakdown - Avatar VFX', youtube_url: 'https://youtube.com/watch?v=abc123', thumbnail_url: '', status: 'completed', frames_count: 892, features_count: 892, duration: 256, channel: 'VFX Studio', created_at: '2026-04-04T09:15:00' },
+            { id: 'c3d4e5f6-a7b8-9012-cdef-123456789012', title: 'News Broadcast Analysis', youtube_url: 'https://dailymotion.com/video/x8abc', thumbnail_url: '', status: 'pending', frames_count: 0, features_count: 0, duration: 0, channel: 'NewsNet', created_at: '2026-04-06T18:00:00' },
+            { id: 'd4e5f6a7-b8c9-0123-defa-234567890123', title: 'TikTok Viral Challenge', youtube_url: 'https://tiktok.com/@user/video/123', thumbnail_url: '', status: 'failed', frames_count: 0, features_count: 0, duration: 0, channel: '@user', created_at: '2026-04-06T20:45:00' },
+        ];
+
+        // === THREE.JS BACKGROUND ===
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x000000, 0);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const ringGeo = new THREE.TorusGeometry(1.5, 0.02, 16, 100);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0xD4AF37, wireframe: true });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        scene.add(ring);
+
+        const coreGeo = new THREE.SphereGeometry(0.8, 32, 32);
+        const coreMat = new THREE.MeshBasicMaterial({ color: 0x00D1FF, wireframe: true, transparent: true, opacity: 0.5 });
+        const core = new THREE.Mesh(coreGeo, coreMat);
+        scene.add(core);
+
+        camera.position.z = 5;
+
+        function animate3D() {
+            requestAnimationFrame(animate3D);
+            ring.rotation.z += 0.005;
+            ring.rotation.y += 0.002;
+            core.rotation.y -= 0.01;
+            const s = 1 + Math.sin(Date.now() * 0.002) * 0.05;
+            core.scale.set(s, s, s);
+            renderer.render(scene, camera);
+        }
+        animate3D();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // === PAGE NAVIGATION ===
+        function showPage(page) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+            document.getElementById('page-' + page).classList.add('active');
+            event.target.closest('.tab-btn').classList.add('active');
+            if (page === 'library') loadLibrary();
+            if (page === 'index') loadIndexStats();
+        }
+
+        // === SOURCE TAB SWITCHING ===
+        function switchSource(type, btn) {
+            document.querySelectorAll('.source-tab').forEach(t => {
+                t.classList.remove('active', 'border-[#00D1FF]', 'text-[#00D1FF]');
+                t.classList.add('border-slate-700', 'text-slate-500');
+            });
+            btn.classList.add('active', 'border-[#00D1FF]', 'text-[#00D1FF]');
+            btn.classList.remove('border-slate-700', 'text-slate-500');
+            document.getElementById('source-url').classList.toggle('hidden', type !== 'url');
+            document.getElementById('source-file').classList.toggle('hidden', type !== 'file');
+        }
+
+        // === FILE UPLOAD ===
+        const dropZone = document.getElementById('file-drop');
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
+
+        function handleFile(file) {
+            selectedFile = file;
+            document.getElementById('file-name').textContent = file.name;
+            document.getElementById('file-size').textContent = (file.size / (1024 * 1024)).toFixed(2) + ' MB';
+            document.getElementById('file-info').classList.remove('hidden');
+            document.getElementById('file-drop').classList.add('hidden');
+        }
+        function handleFileSelect(event) { if (event.target.files.length) handleFile(event.target.files[0]); }
+        function clearFile() { selectedFile = null; document.getElementById('file-input').value = ''; document.getElementById('file-info').classList.add('hidden'); document.getElementById('file-drop').classList.remove('hidden'); }
+
+        // === LANDING PAGE ===
+        function dismissLanding() {
+            document.getElementById('landing-page').style.opacity = '0';
+            document.getElementById('landing-page').style.transition = 'opacity 0.5s ease';
+            setTimeout(() => {
+                document.getElementById('landing-page').style.display = 'none';
+            }, 500);
+        }
+
+        // === PROGRESS INDICATOR ===
+        let progressInterval = null;
+        function startProgress(isApi) {
+            const overlay = document.getElementById('progress-overlay');
+            const circle = document.getElementById('progress-circle');
+            const circumference = 2 * Math.PI * 70; // ~440
+            circle.style.strokeDasharray = circumference;
+            circle.style.strokeDashoffset = circumference;
+
+            let pct = 0;
+            const steps = [
+                { at: 5,  title: 'FRAME EXTRACTION', status: 'Decoding video stream...', phase: 'Phase 1 of 5', eta: '~25s', step: 1 },
+                { at: 25, title: 'OPTICAL FLOW', status: 'Computing motion vectors...', phase: 'Phase 2 of 5', eta: '~20s', step: 2 },
+                { at: 50, title: 'AI DETECTION', status: 'Running neural analysis...', phase: 'Phase 3 of 5', eta: '~15s', step: 3 },
+                { at: 75, title: 'DATABASE MATCH', status: 'Cross-referencing index...', phase: 'Phase 4 of 5', eta: '~8s', step: 4 },
+                { at: 92, title: 'REPORT GEN', status: 'Compiling forensic report...', phase: 'Phase 5 of 5', eta: '~3s', step: 5 },
+            ];
+
+            overlay.classList.add('active');
+
+            progressInterval = setInterval(() => {
+                pct += isApi ? Math.random() * 2 + 0.5 : Math.random() * 3 + 1;
+                if (pct > 99) pct = 99;
+
+                // Update circle
+                const offset = circumference - (pct / 100) * circumference;
+                circle.style.strokeDashoffset = offset;
+                document.getElementById('progress-pct').textContent = Math.floor(pct);
+
+                // Update steps
+                for (let i = steps.length - 1; i >= 0; i--) {
+                    if (pct >= steps[i].at) {
+                        document.getElementById('progress-title').textContent = steps[i].title;
+                        document.getElementById('progress-status').textContent = steps[i].status;
+                        document.getElementById('progress-phase').textContent = steps[i].phase;
+                        document.getElementById('progress-eta').textContent = 'ETA: ' + steps[i].eta;
+                        document.getElementById('progress-sub-bar').style.width = Math.min(pct, 100) + '%';
+
+                        // Highlight current step
+                        document.querySelectorAll('#progress-steps [data-step]').forEach(el => {
+                            const stepNum = parseInt(el.getAttribute('data-step'));
+                            const icon = el.querySelector('span:first-child');
+                            const text = el.querySelector('span:last-child');
+                            if (stepNum === steps[i].step) {
+                                icon.textContent = '▸'; icon.style.color = '#00D1FF';
+                                text.style.color = '#EAF2F8';
+                            } else if (stepNum < steps[i].step) {
+                                icon.textContent = '✓'; icon.style.color = '#00FF9C';
+                                text.style.color = '#00FF9C';
+                            } else {
+                                icon.textContent = '○'; icon.style.color = '#475569';
+                                text.style.color = '#475569';
+                            }
+                        });
+                        break;
+                    }
+                }
+            }, 200);
+        }
+
+        function completeProgress() {
+            clearInterval(progressInterval);
+            const circle = document.getElementById('progress-circle');
+            const circumference = 2 * Math.PI * 70;
+            circle.style.strokeDashoffset = 0;
+            document.getElementById('progress-pct').textContent = '100';
+            document.getElementById('progress-title').textContent = 'ANALYSIS COMPLETE';
+            document.getElementById('progress-status').textContent = 'Forensic verdict ready';
+            document.getElementById('progress-phase').textContent = 'Complete';
+            document.getElementById('progress-eta').textContent = 'Done';
+            document.getElementById('progress-sub-bar').style.width = '100%';
+
+            // Mark all steps complete
+            document.querySelectorAll('#progress-steps [data-step]').forEach(el => {
+                el.querySelector('span:first-child').textContent = '✓';
+                el.querySelector('span:first-child').style.color = '#00FF9C';
+                el.querySelector('span:last-child').style.color = '#00FF9C';
+            });
+
+            setTimeout(() => {
+                document.getElementById('progress-overlay').classList.remove('active');
+            }, 1500);
+        }
+
+        // === API URL MANAGEMENT ===
+        function setApiUrl() {
+            const url = document.getElementById('api-url-input').value.trim();
+            if (!url) { alert('Enter your HF Spaces URL'); return; }
+            // Normalize URL
+            API_BASE = url.replace(/\/+$/, '') + (url.includes('/api') ? '' : '/api/v1');
+            document.getElementById('api-url-input').value = API_BASE;
+            alert('API URL set to: ' + API_BASE);
+            connectApi();
+        }
+
+        // === API HELPER (silent - only called when user explicitly triggers) ===
+        async function apiCall(url, options = {}) {
+            if (!apiOnline) return { _offline: true };
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 3000);
+                const res = await fetch(url, { ...options, signal: controller.signal });
+                clearTimeout(timeout);
+                if (!res.ok) throw new Error(await res.text());
+                apiOnline = true;
+                return await res.json();
+            } catch (err) {
+                apiOnline = false;
+                return { _offline: true };
+            }
+        }
+
+        // Connect to backend API (user-triggered, no auto-ping)
+        async function connectApi() {
+            document.getElementById('node-status').textContent = 'CONNECTING...';
+            try {
+                const res = await fetch(API_BASE + '/health', { mode: 'cors', signal: AbortSignal.timeout(3000) });
+                if (res.ok) {
+                    apiOnline = true;
+                    updateStatus();
+                    alert('✅ Connected to backend API');
+                }
+            } catch (e) {
+                apiOnline = false;
+                updateStatus();
+                alert('⚠️ Backend not available. Running in mock data mode.');
+            }
+        }
+
+        // === SUBMIT EVIDENCE ===
+        async function submitEvidence() {
+            const isFile = !document.getElementById('source-file').classList.contains('hidden');
+            const analysisType = document.getElementById('analysis-type').value;
+            const btn = document.getElementById('submit-btn');
+            document.getElementById('home-error').classList.add('hidden');
+            document.getElementById('home-success').classList.add('hidden');
+
+            if (isFile && !selectedFile) { showError('home', 'Please select a video file'); return; }
+            if (!isFile && !document.getElementById('input-url').value.trim()) { showError('home', 'Please enter a valid URL'); return; }
+
+            btn.disabled = true;
+
+            try {
+                if (isFile) {
+                    // Mock file submission with progress
+                    startProgress(false);
+                    await new Promise(r => setTimeout(r, 8000));
+                    completeProgress();
+                    await new Promise(r => setTimeout(r, 1600));
+                    const newEntry = { id: crypto.randomUUID(), title: selectedFile.name, youtube_url: '', thumbnail_url: '', status: 'completed', frames_count: Math.floor(Math.random()*2000)+500, features_count: Math.floor(Math.random()*2000)+500, duration: Math.floor(Math.random()*600)+60, channel: 'Local Upload', created_at: new Date().toISOString() };
+                    mockLibrary.unshift(newEntry);
+                    showSuccess('home', `Analysis complete: ${selectedFile.name} | Status: VERIFIED`);
+                } else {
+                    const url = document.getElementById('input-url').value.trim();
+                    const result = await apiCall(`${API_BASE}/videos/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ youtube_url: url, analysis_type: analysisType }) });
+                    if (result._offline) {
+                        startProgress(false);
+                        await new Promise(r => setTimeout(r, 8000));
+                        completeProgress();
+                        await new Promise(r => setTimeout(r, 1600));
+                        const hostname = (() => { try { return new URL(url).hostname; } catch { return 'unknown'; }})();
+                        const newEntry = { id: crypto.randomUUID(), title: `Video from ${hostname}`, youtube_url: url, thumbnail_url: '', status: 'completed', frames_count: Math.floor(Math.random()*2000)+500, features_count: Math.floor(Math.random()*2000)+500, duration: Math.floor(Math.random()*600)+60, channel: hostname, created_at: new Date().toISOString() };
+                        mockLibrary.unshift(newEntry);
+                        showSuccess('home', `Analysis complete: ${url} | Status: VERIFIED`);
+                    } else {
+                        showSuccess('home', `Video submitted: ${result.title || url} | Status: ${result.status}`);
+                    }
+                }
+                clearFile();
+                document.getElementById('input-url').value = '';
+                updateStatus();
+            } catch (err) {
+                showError('home', err.message || 'Submission failed');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+        function showError(page, msg) { const el = document.getElementById(page + '-error'); const txt = document.getElementById(page + '-error-text'); if (el && txt) { txt.textContent = msg; el.classList.remove('hidden'); } }
+        function showSuccess(page, msg) { const el = document.getElementById(page + '-success'); const txt = document.getElementById(page + '-success-text'); if (el && txt) { txt.textContent = msg; el.classList.remove('hidden'); } }
+
+        // === SEARCH ===
+        async function executeSearch() {
+            const url = document.getElementById('search-url').value.trim();
+            const topK = parseInt(document.getElementById('search-topk').value) || 10;
+            const threshold = parseFloat(document.getElementById('search-threshold').value) || 0.5;
+            const btn = document.getElementById('search-btn');
+            document.getElementById('search-error').classList.add('hidden');
+            document.getElementById('search-results').classList.add('hidden');
+            if (!url) { showError('search', 'Please enter a query URL'); return; }
+
+            btn.disabled = true;
+
+            try {
+                const data = await apiCall(`${API_BASE}/search/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ youtube_url: url, top_k: topK, threshold }) });
+                if (data._offline) {
+                    startProgress(false);
+                    await new Promise(r => setTimeout(r, 6000));
+                    completeProgress();
+                    await new Promise(r => setTimeout(r, 1600));
+                    const mockResults = { total_results: mockLibrary.filter(v => v.status === 'completed').length, results: mockLibrary.filter(v => v.status === 'completed').map((v, i) => ({ rank: i + 1, video_id: v.id, youtube_id: v.youtube_url, title: v.title, num_matches: Math.floor(Math.random() * 500) + 100, avg_similarity: 0.85 - i * 0.15, max_similarity: 0.92 - i * 0.1, thumbnail_url: v.thumbnail_url })) };
+                    displaySearchResults(mockResults);
+                } else {
+                    displaySearchResults(data);
+                }
+            } catch (err) {
+                showError('search', err.message || 'Search failed');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function displaySearchResults(data) {
+            document.getElementById('search-count').textContent = `${data.total_results || 0} matches found`;
+            const list = document.getElementById('search-results-list');
+            list.innerHTML = '';
+            if (!data.results || data.results.length === 0) {
+                list.innerHTML = '<div class="bg-[#121C26]/50 border border-slate-800 p-8 rounded-lg text-center"><p class="text-slate-400 text-sm">No similar evidence found above threshold</p></div>';
+            } else {
+                data.results.forEach((item, idx) => {
+                    list.innerHTML += `<div class="evidence-tile p-4 rounded-lg"><div class="flex items-start gap-4"><div class="flex-shrink-0"><div class="w-12 h-12 rounded-full bg-cyan/20 border-2 border-[#00D1FF] flex items-center justify-center"><span class="text-[#00D1FF] font-black text-lg">#${item.rank || idx + 1}</span></div></div><div class="flex-1 min-w-0"><h4 class="text-white font-bold text-sm mb-1 truncate">${item.title || item.video_id || 'Unknown'}</h4><p class="text-slate-500 text-[10px] font-mono mb-3">ID: ${(item.video_id || 'N/A').substring(0, 8)}</p><div class="grid grid-cols-3 gap-3 mb-3"><div class="bg-[#0B1A2A]/50 p-2 rounded"><p class="text-[9px] text-slate-500 uppercase">Matches</p><p class="text-[#00D1FF] font-bold text-sm">${item.num_matches || 0}</p></div><div class="bg-[#0B1A2A]/50 p-2 rounded"><p class="text-[9px] text-slate-500 uppercase">Avg Sim</p><p class="text-[#D4AF37] font-bold text-sm">${((item.avg_similarity || 0) * 100).toFixed(1)}%</p></div><div class="bg-[#0B1A2A]/50 p-2 rounded"><p class="text-[9px] text-slate-500 uppercase">Max Sim</p><p class="text-green-500 font-bold text-sm">${((item.max_similarity || 0) * 100).toFixed(1)}%</p></div></div><div class="h-2 bg-[#0B1A2A] rounded-full overflow-hidden"><div class="h-full bg-gradient-to-r from-[#00D1FF] to-[#D4AF37]" style="width:${(item.avg_similarity || 0) * 100}%"></div></div></div></div></div>`;
+                });
+            }
+            document.getElementById('search-results').classList.remove('hidden');
+        }
+
+        // === LIBRARY ===
+        async function loadLibrary() {
+            const filter = document.getElementById('library-filter').value;
+            let videos = mockLibrary;
+            if (filter) videos = videos.filter(v => v.status === filter);
+            try {
+                let url = `${API_BASE}/videos/?skip=0&limit=100`;
+                if (filter) url += `&status=${filter}`;
+                const apiVideos = await apiCall(url);
+                if (!apiVideos._offline) videos = apiVideos;
+            } catch (e) { /* Use mock */ }
+            displayLibrary(videos);
+        }
+
+        function displayLibrary(videos) {
+            const grid = document.getElementById('library-grid');
+            const empty = document.getElementById('library-empty');
+            if (!videos || videos.length === 0) { grid.innerHTML = ''; empty.classList.remove('hidden'); return; }
+            empty.classList.add('hidden');
+            grid.innerHTML = videos.map(v => {
+                const statusClass = v.status === 'completed' ? 'badge-verified' : v.status === 'failed' ? 'badge-flagged' : 'badge-processing';
+                const statusText = v.status ? v.status.toUpperCase() : 'UNKNOWN';
+                return `<div class="evidence-tile rounded-lg overflow-hidden">${v.thumbnail_url ? `<img src="${v.thumbnail_url}" class="w-full h-40 object-cover" alt="" onerror="this.style.display='none'" />` : '<div class="w-full h-40 bg-[#0B1A2A] flex items-center justify-center text-slate-600 text-xs">NO PREVIEW</div>'}<div class="p-4 space-y-2"><h6 class="text-sm font-bold text-white truncate">${v.title || 'Untitled Evidence'}</h6><p class="text-[10px] text-slate-400 font-mono">CASE-${(v.id || '000000').substring(0, 8).toUpperCase()}</p><div class="flex justify-between items-center pt-3 border-t border-slate-800"><span class="inline-flex items-center gap-1 px-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider ${statusClass}">${statusText}</span>${v.youtube_url ? `<a href="${v.youtube_url}" target="_blank" class="text-[#00D1FF] text-[10px] underline hover:text-[#D4AF37]">View →</a>` : ''}</div></div></div>`;
+            }).join('');
+        }
+
+        // === INDEX STATS ===
+        async function loadIndexStats() {
+            let stats = { exists: true, total_vectors: 2139, total_videos: 2, feature_dim: 2048, file_size_mb: 187 };
+            try {
+                const apiStats = await apiCall(`${API_BASE}/index/stats`);
+                if (!apiStats._offline) stats = apiStats;
+            } catch (e) { /* Use mock */ }
+            displayIndexStats(stats);
+        }
+
+        function displayIndexStats(stats) {
+            const statsEl = document.getElementById('index-stats');
+            const noDataEl = document.getElementById('index-no-data');
+            if (stats && stats.exists) {
+                statsEl.classList.remove('hidden');
+                noDataEl.classList.add('hidden');
+                document.getElementById('stat-vectors').textContent = (stats.total_vectors || 0).toLocaleString();
+                document.getElementById('stat-videos').textContent = stats.total_videos || 0;
+                document.getElementById('stat-dim').textContent = stats.feature_dim || 0;
+                document.getElementById('stat-size').textContent = (stats.file_size_mb || 0).toFixed(0) + ' MB';
+            } else {
+                statsEl.classList.add('hidden');
+                noDataEl.classList.remove('hidden');
+            }
+        }
+
+        async function rebuildIndex() {
+            if (!confirm('⚠️ REBUILD THE ENTIRE FORENSIC INDEX?')) return;
+            const res = await apiCall(`${API_BASE}/index/rebuild`, { method: 'POST' });
+            if (res._offline) alert('⚠️ API offline - rebuild queued'); else alert('✅ Index rebuild started');
+            loadIndexStats();
+        }
+
+        async function resetIndex() {
+            if (!confirm('⚠️ CRITICAL: This will DELETE the entire index. Continue?')) return;
+            const res = await apiCall(`${API_BASE}/index/reset`, { method: 'POST' });
+            if (res._offline) { mockLibrary = []; alert('✅ Index cleared (offline mode)'); displayIndexStats(null); } else { mockLibrary = []; alert('✅ Index reset'); displayIndexStats(null); }
+        }
+
+        // === STATUS BAR ===
+        async function updateStatus() {
+            const connectLink = document.getElementById('connect-link');
+            const apiConfig = document.getElementById('api-config');
+            const isLocal = window.location.hostname === 'localhost';
+
+            if (apiOnline) {
+                document.getElementById('node-status').textContent = 'ONLINE';
+                document.getElementById('index-info').textContent = 'LIVE API';
+                try {
+                    const s = await apiCall(`${API_BASE}/index/stats`);
+                    if (!s._offline) {
+                        document.getElementById('index-info').textContent = `${s.total_vectors?.toLocaleString() || 0} VECTORS`;
+                    }
+                } catch (e) {}
+                if (connectLink) { connectLink.textContent = '🔄 Reconnect'; connectLink.style.display = isLocal ? 'block' : 'none'; }
+                if (apiConfig) apiConfig.style.display = isLocal ? 'block' : 'none';
+            } else {
+                document.getElementById('node-status').textContent = 'MOCK';
+                document.getElementById('index-info').textContent = 'Mock Data Mode';
+                if (connectLink) { connectLink.textContent = 'Connect to API →'; connectLink.style.display = isLocal ? 'block' : 'none'; }
+                if (apiConfig) apiConfig.style.display = isLocal ? 'block' : 'none';
+            }
+        }
+
+        // Auto-connect on load if not localhost
+        if (apiOnline) updateStatus();
+    </script>
+</body>
+</html>

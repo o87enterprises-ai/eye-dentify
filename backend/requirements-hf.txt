@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+python-multipart
+pydantic
+pydantic-settings
+sqlalchemy
+aiosqlite
+yt-dlp
+faiss-cpu
+numpy
+Pillow
+opencv-python-headless
+scikit-learn
+httpx
+aiofiles
+loguru
