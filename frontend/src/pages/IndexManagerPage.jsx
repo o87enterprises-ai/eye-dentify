@@ -133,7 +133,7 @@ function IndexManagerPage({ onStatsChange }) {
             animate={{ opacity: 1, y: 0 }}
             className="grid grid-cols-2 lg:grid-cols-4 gap-4"
           >
-            <div className="forensic-panel p-5 rounded-lg text-center">
+            <div className="glass-card glass-card--cyan p-5 rounded-lg text-center">
               <Database size={28} className="text-cyan mx-auto mb-3" />
               <div className="text-3xl font-black text-cyan mb-1">
                 {stats.total_vectors.toLocaleString()}
@@ -141,19 +141,19 @@ function IndexManagerPage({ onStatsChange }) {
               <p className="text-[10px] text-slate-400 uppercase tracking-widest">Total Vectors</p>
             </div>
 
-            <div className="forensic-panel p-5 rounded-lg text-center">
+            <div className="glass-card glass-card--gold p-5 rounded-lg text-center">
               <HardDrive size={28} className="text-gold mx-auto mb-3" />
               <div className="text-3xl font-black text-gold mb-1">{stats.total_videos}</div>
               <p className="text-[10px] text-slate-400 uppercase tracking-widest">Videos Indexed</p>
             </div>
 
-            <div className="forensic-panel p-5 rounded-lg text-center">
+            <div className="glass-card glass-card--success p-5 rounded-lg text-center">
               <Layers size={28} className="text-success mx-auto mb-3" />
               <div className="text-3xl font-black text-success mb-1">{stats.feature_dim}</div>
               <p className="text-[10px] text-slate-400 uppercase tracking-widest">Feature Dim</p>
             </div>
 
-            <div className="forensic-panel p-5 rounded-lg text-center">
+            <div className="glass-card glass-card--danger p-5 rounded-lg text-center">
               <Activity size={28} className="text-danger mx-auto mb-3" />
               <div className="text-3xl font-black text-danger mb-1">
                 {stats.file_size_mb.toFixed(0)} MB
@@ -165,7 +165,7 @@ function IndexManagerPage({ onStatsChange }) {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-danger/10 border border-danger p-8 rounded-lg text-center"
+            className="glass-card glass-card--danger p-8 text-center"
           >
             <AlertTriangle size={48} className="text-danger mx-auto mb-4" />
             <p className="text-danger text-sm font-bold uppercase tracking-widest mb-2">
@@ -181,7 +181,7 @@ function IndexManagerPage({ onStatsChange }) {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="forensic-panel p-6 rounded-lg"
+          className="glass-card p-6 rounded-lg"
         >
           <h3 className="text-gold text-sm font-black uppercase tracking-widest mb-4 flex items-center gap-2">
             <RefreshCw size={16} />
@@ -229,7 +229,7 @@ function IndexManagerPage({ onStatsChange }) {
           </div>
 
           {/* Help Text */}
-          <div className="mt-6 p-4 bg-navy/50 border border-slate-800 rounded">
+          <div className="mt-6 p-4 bg-navy/50 rounded">
             <p className="text-[10px] text-slate-400 leading-relaxed">
               <span className="text-gold font-bold">REBUILD:</span> Recreates the index from all existing feature files. Use after adding videos manually or recovering from backup.
             </p>
@@ -244,7 +244,7 @@ function IndexManagerPage({ onStatsChange }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="bg-steel/50 border border-slate-800 rounded-lg p-4"
+          className="glass-card p-4"
         >
           <h4 className="text-cyan text-[10px] font-black uppercase tracking-widest mb-3">
             System Architecture

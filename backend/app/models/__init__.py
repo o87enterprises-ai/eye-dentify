@@ -161,3 +161,6 @@ from sqlalchemy.orm import relationship  # noqa: E402
 
 Video.analyses = relationship("Analysis", back_populates="video", cascade="all, delete-orphan")
 Analysis.video = relationship("Video", back_populates="analyses")
+
+# User model
+from app.models.user import User  # noqa: E402

@@ -109,3 +109,10 @@ class IndexStatsResponse(BaseModel):
 class ErrorResponse(BaseModel):
     error: str
     detail: Optional[str] = None
+
+
+class FreeTierLimitResponse(BaseModel):
+    require_ad: bool = True
+    daily_limit: int
+    current_count: int
+    message: str = "Daily free tier limit reached. Watch an ad to continue."

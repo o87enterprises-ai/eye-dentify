@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Upload, Link2, Zap } from "lucide-react";
 
-function EvidenceSubmit({ onSubmit, loading }) {
+function SubmitForm({ onSubmit, loading }) {
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [analysisType, setAnalysisType] = useState("full");
 
@@ -85,4 +85,4 @@ function EvidenceSubmit({ onSubmit, loading }) {
   );
 }
 
-export default EvidenceSubmit;
+export default SubmitForm;

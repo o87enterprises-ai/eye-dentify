@@ -10,6 +10,7 @@ from loguru import logger
 
 from app.database import get_db
 from app.models import Video, VideoStatus
+from app.models.user import User
 from app.schemas import (
     SearchRequest,
     SearchResponse,
@@ -18,6 +19,7 @@ from app.schemas import (
 )
 from app.services import YouTubeService, FAISSIndexManager, FeatureEncoder
 from app.config import get_settings
+from app.middleware.auth import get_current_user
 
 router = APIRouter(prefix="/search", tags=["Search"])
 settings = get_settings()
@@ -27,6 +29,7 @@ settings = get_settings()
 async def search_by_youtube(
     request: SearchRequest,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Search for videos similar to a YouTube video.
@@ -99,6 +102,7 @@ async def search_by_youtube(
 async def search_by_image(
     request: SearchRequest,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Search for videos similar to an image URL.

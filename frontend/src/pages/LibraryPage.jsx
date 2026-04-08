@@ -87,7 +87,7 @@ function LibraryPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-steel border border-slate-800 p-4 rounded-lg"
+          className="glass-card p-4"
         >
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-2">
@@ -123,7 +123,7 @@ function LibraryPage() {
             <p className="text-slate-400 text-sm uppercase tracking-widest">Loading Evidence...</p>
           </div>
         ) : videos.length === 0 ? (
-          <div className="bg-steel/50 border border-slate-800 p-12 rounded-lg text-center">
+          <div className="glass-card p-12 text-center">
             <AlertCircle size={48} className="text-slate-600 mx-auto mb-4" />
             <p className="text-slate-400 text-sm mb-2">No evidence files found</p>
             <p className="text-slate-600 text-xs">
@@ -147,7 +147,7 @@ function LibraryPage() {
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between bg-steel border border-slate-800 p-4 rounded-lg">
+            <div className="glass-card p-4 flex items-center justify-between">
               <button
                 className="px-4 py-2 bg-navy border border-slate-700 hover:border-cyan text-slate-300 hover:text-cyan rounded text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={page === 0}

@@ -3,12 +3,16 @@ import { motion } from "framer-motion";
 import { AlertCircle, ChevronRight } from "lucide-react";
 import SearchForm from "../components/SearchForm.jsx";
 import VideoCard from "../components/VideoCard.jsx";
+import RewardedAdModal from "../components/RewardedAdModal.jsx";
+import BannerAd from "../components/BannerAd.jsx";
 import { api } from "../services/api.jsx";
+import { useDailyLimit } from "../hooks/useDailyLimit.js";
 
 function SearchPage({ setAnalyzing }) {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
+  const { showAdModal, handleAdComplete, closeAdModal, requestAnalysis } = useDailyLimit();
 
   const handleSearch = async ({ queryUrl, topK, threshold }) => {
     setLoading(true);
@@ -48,6 +52,9 @@ function SearchPage({ setAnalyzing }) {
         {/* Search Form */}
         <SearchForm onSearch={handleSearch} loading={loading} />
 
+        {/* Banner Ad - Below Search Form */}
+        <BannerAd id="search-banner-1" size="banner" position="below" />
+
         {/* Error Alert */}
         {error && (
           <motion.div
@@ -73,26 +80,28 @@ function SearchPage({ setAnalyzing }) {
             className="space-y-4"
           >
             {/* Results Header */}
-            <div className="flex items-center justify-between bg-steel border border-slate-800 p-4 rounded-lg">
-              <div>
-                <h3 className="text-gold text-sm font-black uppercase tracking-widest">
-                  Query Results
-                </h3>
-                <p className="text-slate-400 text-xs mt-1">
-                  {results.total_results} matches found above threshold
-                </p>
-              </div>
-              {results.results.length === 0 && (
-                <div className="text-right">
-                  <p className="text-slate-500 text-xs">No matches found</p>
-                  <p className="text-slate-600 text-[10px]">Try lowering the threshold</p>
+            <div className="glass-card p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-gold text-sm font-black uppercase tracking-widest">
+                    Query Results
+                  </h3>
+                  <p className="text-slate-400 text-xs mt-1">
+                    {results.total_results} matches found above threshold
+                  </p>
                 </div>
-              )}
+                {results.results.length === 0 && (
+                  <div className="text-right">
+                    <p className="text-slate-500 text-xs">No matches found</p>
+                    <p className="text-slate-600 text-[10px]">Try lowering the threshold</p>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Results List */}
             {results.results.length === 0 ? (
-              <div className="bg-steel/50 border border-slate-800 p-8 rounded-lg text-center">
+              <div className="glass-card p-8 text-center">
                 <AlertCircle size={40} className="text-slate-600 mx-auto mb-3" />
                 <p className="text-slate-400 text-sm mb-2">No similar evidence found</p>
                 <p className="text-slate-600 text-xs">
@@ -107,7 +116,7 @@ function SearchPage({ setAnalyzing }) {
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: idx * 0.05 }}
-                    className="evidence-tile p-4 rounded-lg"
+                    className="glass-card glass-card--cyan p-4 rounded-lg"
                   >
                     <div className="flex items-start gap-4">
                       {/* Rank Badge */}
@@ -157,7 +166,7 @@ function SearchPage({ setAnalyzing }) {
 
                       {/* Thumbnail */}
                       {item.thumbnail_url && (
-                        <div className="flex-shrink-0">
+                        <div className="flex-shrink-0 hidden sm:block">
                           <img
                             src={item.thumbnail_url}
                             alt={item.title}
@@ -170,8 +179,20 @@ function SearchPage({ setAnalyzing }) {
                 ))}
               </div>
             )}
+
+            {/* Banner Ad - Below Results */}
+            {results.results.length > 0 && (
+              <BannerAd id="search-banner-2" size="large" position="below" />
+            )}
           </motion.div>
         )}
+
+        {/* Rewarded Ad Modal */}
+        <RewardedAdModal
+          isOpen={showAdModal}
+          onClose={closeAdModal}
+          onComplete={handleAdComplete}
+        />
       </div>
     </div>
   );

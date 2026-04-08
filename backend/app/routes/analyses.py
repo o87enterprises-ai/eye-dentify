@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from typing import List, Optional
@@ -7,22 +7,101 @@ from loguru import logger
 
 from app.database import get_db
 from app.models import Video, Analysis, AnalysisStatus, AnalysisType
+from app.models.user import User
 from app.schemas import (
     AnalysisResponse,
     ErrorResponse,
+    FreeTierLimitResponse,
 )
+from app.middleware.auth import get_current_user
 from app.tasks import analyze_video
+from app.config import get_settings
 
 router = APIRouter(prefix="/analyses", tags=["Analyses"])
+settings = get_settings()
 
 
-@router.post("/{video_id}", response_model=AnalysisResponse)
+@router.post("/{video_id}")
 async def create_analysis(
     video_id: str,
     analysis_type: str = Query(default="full", description="full, search, gps, or ai"),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    """Create a new analysis for a video."""
+    """Create a new analysis for a video. Requires authentication."""
+
+    # === Free Tier Usage Check ===
+    if user.should_reset_daily_limit():
+        user.reset_daily_limit()
+        await db.commit()
+
+    if user.daily_analysis_count >= settings.FREE_TIER_DAILY_LIMIT:
+        return FreeTierLimitResponse(
+            daily_limit=settings.FREE_TIER_DAILY_LIMIT,
+            current_count=user.daily_analysis_count,
+        )
+
+    # === Validate video_id ===
+    try:
+        video_uuid = uuid.UUID(video_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid video ID")
+
+    # Check video exists
+    result = await db.execute(select(Video).where(Video.id == video_uuid))
+    video = result.scalar_one_or_none()
+
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    try:
+        analysis_type_enum = AnalysisType(analysis_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid analysis type. Must be: full, search, gps, ai",
+        )
+
+    analysis = Analysis(
+        video_id=video_uuid,
+        analysis_type=analysis_type_enum,
+        status=AnalysisStatus.PENDING,
+    )
+    db.add(analysis)
+
+    # Increment usage count
+    user.increment_daily_count()
+    await db.commit()
+    await db.refresh(analysis)
+
+    # Queue analysis task
+    task = analyze_video.delay(str(video.id), str(analysis.id), analysis_type)
+
+    logger.info(f"Created analysis {analysis.id} for video {video_id} by user {user.email}")
+
+    return AnalysisResponse(
+        id=str(analysis.id),
+        video_id=str(analysis.video_id),
+        analysis_type=analysis.analysis_type.value,
+        status=AnalysisStatusEnum(analysis.status.value),
+        progress=analysis.progress,
+        results=analysis.results,
+        error_message=analysis.error_message,
+        created_at=analysis.created_at,
+        completed_at=analysis.completed_at,
+    )
+
+
+@router.post("/{video_id}/unlock", response_model=dict)
+async def unlock_analysis(
+    video_id: str,
+    analysis_type: str = Query(default="full"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Unlock an analysis after watching a rewarded ad. Does not increment counter."""
+
+    # Validate video_id
     try:
         video_uuid = uuid.UUID(video_id)
     except ValueError:
@@ -52,22 +131,18 @@ async def create_analysis(
     await db.commit()
     await db.refresh(analysis)
 
-    # Queue analysis task
+    # Queue analysis task (no counter increment - ad unlocked)
     task = analyze_video.delay(str(video.id), str(analysis.id), analysis_type)
 
-    logger.info(f"Created analysis {analysis.id} for video {video_id}")
+    logger.info(f"Ad-unlocked analysis {analysis.id} for video {video_id} by user {user.email}")
 
-    return AnalysisResponse(
-        id=str(analysis.id),
-        video_id=str(analysis.video_id),
-        analysis_type=analysis.analysis_type.value,
-        status=AnalysisStatusEnum(analysis.status.value),
-        progress=analysis.progress,
-        results=analysis.results,
-        error_message=analysis.error_message,
-        created_at=analysis.created_at,
-        completed_at=analysis.completed_at,
-    )
+    return {
+        "id": str(analysis.id),
+        "video_id": str(analysis.video_id),
+        "analysis_type": analysis.analysis_type.value,
+        "status": analysis.status.value,
+        "message": "Analysis unlocked via rewarded ad",
+    }
 
 
 @router.get("/{analysis_id}", response_model=AnalysisResponse)

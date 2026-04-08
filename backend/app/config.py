@@ -40,6 +40,29 @@ class Settings(BaseSettings):
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 30
 
+    # Authentication
+    JWT_SECRET: str = os.environ.get("JWT_SECRET", "change-this-secret-key-in-production")
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRATION_HOURS: int = int(os.environ.get("JWT_EXPIRATION_HOURS", "24"))
+
+    # Email
+    EMAIL_PROVIDER: str = os.environ.get("EMAIL_PROVIDER", "mock")  # mock | resend | smtp
+    RESEND_API_KEY: str = os.environ.get("RESEND_API_KEY", "")
+
+    # SMTP settings
+    SMTP_HOST: str = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    SMTP_PORT: int = int(os.environ.get("SMTP_PORT", "587"))
+    SMTP_USER: str = os.environ.get("SMTP_USER", "")
+    SMTP_PASSWORD: str = os.environ.get("SMTP_PASSWORD", "")
+    SMTP_FROM: str = os.environ.get("SMTP_FROM", "noreply@eyedentify.app")
+    SMTP_USE_TLS: bool = os.environ.get("SMTP_USE_TLS", "true").lower() == "true"
+
+    # Frontend URL (for CORS and email links)
+    FRONTEND_URL: str = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+
+    # Free tier
+    FREE_TIER_DAILY_LIMIT: int = int(os.environ.get("FREE_TIER_DAILY_LIMIT", "1"))
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

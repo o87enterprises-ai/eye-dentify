@@ -47,6 +47,10 @@ services:
       FEATURES_DIR: /data/features
       INDEX_DIR: /data/index
       VIDEOS_DIR: /data/videos
+      FRONTEND_URL: http://localhost:3000
+      JWT_SECRET: change-this-to-a-long-random-string-in-production
+      EMAIL_PROVIDER: mock
+      FREE_TIER_DAILY_LIMIT: "1"
     ports:
       - "8000:8000"
     volumes:

@@ -7,6 +7,7 @@ from loguru import logger
 
 from app.database import get_db
 from app.models import Video, Analysis, VideoStatus, AnalysisStatus, SearchResult
+from app.models.user import User
 from app.schemas import (
     YouTubeSubmitRequest,
     SearchRequest,
@@ -20,6 +21,7 @@ from app.schemas import (
 from app.services import YouTubeService, FAISSIndexManager
 from app.tasks import process_video, analyze_video
 from app.config import get_settings
+from app.middleware.auth import get_current_user, get_optional_user
 
 router = APIRouter(prefix="/videos", tags=["Videos"])
 settings = get_settings()
@@ -30,6 +32,7 @@ async def submit_video(
     request: YouTubeSubmitRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Submit a YouTube URL for processing.
@@ -206,6 +209,7 @@ async def list_videos(
 async def delete_video(
     video_id: str,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Delete a video and its analyses."""
     try:
